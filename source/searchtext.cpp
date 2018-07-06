@@ -1,4 +1,5 @@
 #include "searchtext.h"
+#include "filesystem.h"
 #include <thread>
 
 #include "logs.h"
@@ -6,10 +7,11 @@
 using namespace std;
 using namespace fifu;
 
-SearchJob::SearchJob(SearchJob_type_t type, const std::string & path)
+SearchJob::SearchJob(SearchJob_type_t type, const std::string & path, const std::string & name)
 {
 	this->type = type;
 	this->path = path;
+	this->name = name;
 }
 
 SearchJob::~SearchJob()
@@ -27,6 +29,15 @@ string SearchJob::getPath() const
 	return this->path;
 }
 
+std::string SearchJob::getName() const
+{
+	return this->name;
+}
+
+std::string SearchJob::getFullName() const
+{
+	return this->path + this->name;
+}
 
 
 
@@ -88,17 +99,20 @@ void SearchThread::init(SearchText * base, SearchJobPack & job)
 
 void SearchThread::jobDirectory(const SearchJob * job)
 {
-	LOG_DBG("Dirrectory: ", job->getPath());
+	LOG_DBG("Dirrectory: ", job->getFullName());
+
+	/*if (!this->base->isMaxThreads())
+		this->base->insertThread("some path to some dir");*/
 }
 
 void SearchThread::jobFile(const SearchJob * job)
 {
-	LOG_DBG("File: ", job->getPath());
+	LOG_DBG("File: ", job->getFullName());
 }
 
-SearchThread::SearchThread(SearchText * base, const std::string & path)
+SearchThread::SearchThread(SearchText * base, const std::string & path, const std::string & name)
 {
-	SearchJob job = SearchJob(SearchJob_openDirectory, path);
+	SearchJob job = SearchJob(SearchJob_openDirectory, path, ".");
 	SearchJobPack jobp;
 	jobp.insertJob(job);
 
@@ -122,9 +136,6 @@ void SearchThread::join()
 
 void SearchThread::doing()
 {
-	if (!this->base->isMaxThreads())
-		this->base->insertThread("some path to some dir");
-
 	while (this->queue.size() > 0)
 	{
 		SearchJobPack * jobp = &(*this->queue.begin());
@@ -185,7 +196,7 @@ void SearchText::search(const std::string & text, std::vector<FiFuFound> * found
 	this->found = found;
 	this->text = text;
 
-	this->insertThread("some path to some dir");
+	this->insertThread(FileSystem::getLocalPath(), ".");
 
 	while (this->threads.size() > 0)
 	{
@@ -196,7 +207,7 @@ void SearchText::search(const std::string & text, std::vector<FiFuFound> * found
 }
 
 
-void SearchText::insertThread(const std::string & path)
+void SearchText::insertThread(const std::string & path, const std::string & name)
 {
 	this->rdwr.lock();
 
@@ -206,8 +217,7 @@ void SearchText::insertThread(const std::string & path)
 		throw "Threads is max";
 	}
 
-	this->threads.push_back(new SearchThread(this, path));
-	LOG_DBG("Size: ", this->threads.size(), ": ", this->isMaxThreads());
+	this->threads.push_back(new SearchThread(this, path, name));
 
 	this->rdwr.unlock();
 }
@@ -223,7 +233,6 @@ void SearchText::insertThread(SearchJobPack & job)
 	}
 
 	this->threads.push_back(new SearchThread(this, job));
-	LOG_DBG("Size: ", this->threads.size(), ": ", this->isMaxThreads());
 
 	this->rdwr.unlock();
 }

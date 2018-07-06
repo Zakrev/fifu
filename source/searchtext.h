@@ -23,12 +23,15 @@ class SearchJob
 	private:
 		SearchJob_type_t type;
 		std::string path;
+		std::string name;
 	public:
-		SearchJob(SearchJob_type_t type, const std::string & path);
+		SearchJob(SearchJob_type_t type, const std::string & path, const std::string & name);
 		~SearchJob();
 
 		SearchJob_type_t getType() const;
 		std::string getPath() const;
+		std::string getName() const;
+		std::string getFullName() const;
 };
 
 class SearchJobPack
@@ -62,7 +65,7 @@ class SearchThread
 		void jobDirectory(const SearchJob * job); //парсит каталог, заполняя очередь работ
 		void jobFile(const SearchJob * job); //ищет в файле
 	public:
-		SearchThread(SearchText * base, const std::string & path); //начинает работу от директории path
+		SearchThread(SearchText * base, const std::string & path, const std::string & name); //начинает работу от директории path
 		SearchThread(SearchText * base, SearchJobPack & job);//начинает работу job
 		~SearchThread();
 
@@ -83,7 +86,7 @@ class SearchText
 		~SearchText();
 
 		void search(const std::string & text, std::vector<FiFuFound> * found);
-		void insertThread(const std::string & path);
+		void insertThread(const std::string & path, const std::string & name);
 		void insertThread(SearchJobPack & job);
 		bool isMaxThreads() const;
 		void insertFound(FiFuFound & found);
