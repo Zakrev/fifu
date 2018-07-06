@@ -1,7 +1,7 @@
 #include "source/fifu.h"
 
 using namespace std;
-using namespace fifuns;
+using namespace fifu;
 
 int main()
 {

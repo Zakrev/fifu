@@ -13,7 +13,7 @@ namespace fifu
 
 typedef enum
 {
-	SearchJob_null,
+	SearchJob_null, //FIXME: Used?
 	SearchJob_openDirectory,
 	SearchJob_readFile,
 } SearchJob_type_t;
@@ -26,6 +26,9 @@ class SearchJob
 	public:
 		SearchJob(SearchJob_type_t type, const std::string & path);
 		~SearchJob();
+
+		SearchJob_type_t getType() const;
+		std::string getPath() const;
 };
 
 class SearchJobPack
@@ -33,11 +36,13 @@ class SearchJobPack
 	private:
 		std::list<SearchJob> queue;
 	public:
-		SearchJobPack(); //пустая, только для хранения очереди
+		SearchJobPack();
 		~SearchJobPack();
 
 		void insertJob(SearchJob & job); //по типу работы, в начало очереди двигаются файлы, в конец каталоги
-		SearchJob & getNextJob();
+		const SearchJob * getJob() const; //первая в очереди работа
+		void shiftQueue(); // сдвиг очереди
+		bool empty() const;
 };
 
 class SearchText;
@@ -53,13 +58,16 @@ class SearchThread
 		std::list<SearchJobPack> queue;
 		std::thread self;
 
-		void pmain(); //функция потока
-		void jobDirectory(const std::string & path); //парсит каталог, заполняя очередь работ
-		void jobFile(const std::string & path); //ищет в файле
+		void init(SearchText * base, SearchJobPack & job);
+		void jobDirectory(const SearchJob * job); //парсит каталог, заполняя очередь работ
+		void jobFile(const SearchJob * job); //ищет в файле
 	public:
 		SearchThread(SearchText * base, const std::string & path); //начинает работу от директории path
-		SearchThread(SearchText * base, SearchJobPack job);//начинает работу job
+		SearchThread(SearchText * base, SearchJobPack & job);//начинает работу job
 		~SearchThread();
+
+		void join();
+		void doing();
 };
 
 class SearchText
@@ -67,16 +75,17 @@ class SearchText
 	private:
 		std::vector<FiFuFound> * found;
 		std::string text;
-		const unsigned char threads_max = 10;
-		std::vector<SearchThread> threads;
+		const unsigned char threads_max = 2;
+		std::list<SearchThread *> threads;
 		std::mutex rdwr;
 	public:
-		SearchText(std::vector<FiFuFound> * found);
+		SearchText();
 		~SearchText();
 
-		void search(const std::string & text);
+		void search(const std::string & text, std::vector<FiFuFound> * found);
 		void insertThread(const std::string & path);
-		void insertThread(SearchJobPack job);
+		void insertThread(SearchJobPack & job);
+		bool isMaxThreads() const;
 		void insertFound(FiFuFound & found);
 };
 

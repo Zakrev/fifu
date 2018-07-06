@@ -73,9 +73,9 @@ FiFu::~FiFu()
 
 char FiFu::search(const std::string & data)
 {
-	SearchText st = SearchText(&this->found);
+	SearchText st;
 
-	st.search(data);
+	st.search(data, &this->found);
 
 	return (this->getSize() > 0);
 }
