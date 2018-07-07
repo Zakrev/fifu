@@ -4,9 +4,10 @@
 #include <vector>
 #include <mutex>
 #include <thread>
+#include <list>
 
 #include "fifu.h"
-#include <list>
+#include "filesystem.h"
 
 namespace fifu
 {
@@ -64,6 +65,7 @@ class SearchThread
 		void init(SearchText * base, SearchJobPack & job);
 		void jobDirectory(const SearchJob * job); //парсит каталог, заполняя очередь работ
 		void jobFile(const SearchJob * job); //ищет в файле
+		void makeJob(const SearchJob * from, SearchJobPack & jp, const FileSystemFile & file);
 	public:
 		SearchThread(SearchText * base, const std::string & path, const std::string & name); //начинает работу от директории path
 		SearchThread(SearchText * base, SearchJobPack & job);//начинает работу job
@@ -78,9 +80,11 @@ class SearchText
 	private:
 		std::vector<FiFuFound> * found;
 		std::string text;
-		const unsigned char threads_max = 2;
 		std::list<SearchThread *> threads;
 		std::mutex rdwr;
+
+		const unsigned char threads_max = 10;
+		const unsigned thread_slice_point = 5;
 	public:
 		SearchText();
 		~SearchText();
@@ -90,6 +94,7 @@ class SearchText
 		void insertThread(SearchJobPack & job);
 		bool isMaxThreads() const;
 		void insertFound(FiFuFound & found);
+		unsigned getSlicePoint();
 };
 
 }

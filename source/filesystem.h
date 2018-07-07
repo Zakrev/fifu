@@ -4,17 +4,18 @@
 #include <string>
 #include <list>
 
-#include <dirent.h>
-
 namespace fifu
 {
 
 typedef enum
 {
-	FileSystemFile_simple,
-	FileSystemFile_directory
+	FileSystemFile_unknown,
+	FileSystemFile_readFile,
+	FileSystemFile_directory,
+	FileSystemFile_notReadFile
 } FileSystemFile_type_t;
 
+class FileSystem;
 class FileSystemFile
 {
 	private:
@@ -24,8 +25,10 @@ class FileSystemFile
 		FileSystemFile();
 		~FileSystemFile();
 
-		const std::string & getName();
-		FileSystemFile_type_t getType();
+		const std::string & getName() const;
+		FileSystemFile_type_t getType() const;
+
+		friend FileSystem;
 };
 
 class FileSystem
@@ -38,9 +41,9 @@ class FileSystem
 		~FileSystem();
 
 		void readDir(const std::string & path);
-		bool isReaded();
-		size_t getFilesCount();
-		const std::list<FileSystemFile> & getFiles();
+		bool isReaded() const;
+		size_t getFilesCount() const;
+		const std::list<FileSystemFile> & getFiles() const;
 
 		static std::string getLocalPath();
 };

@@ -1,8 +1,7 @@
 #include "searchtext.h"
-#include "filesystem.h"
-#include <thread>
-
 #include "logs.h"
+
+#include <thread>
 
 using namespace std;
 using namespace fifu;
@@ -36,7 +35,13 @@ std::string SearchJob::getName() const
 
 std::string SearchJob::getFullName() const
 {
-	return this->path + this->name;
+	switch (this->type)
+	{
+		case SearchJob_openDirectory:
+			return this->path + this->name + "/";
+		default:
+			return this->path + this->name;
+	}
 }
 
 
@@ -97,12 +102,89 @@ void SearchThread::init(SearchText * base, SearchJobPack & job)
 	this->self = thread(SearchThread_main, this);
 }
 
+void SearchThread::makeJob(const SearchJob * from, SearchJobPack & jp, const FileSystemFile & file)
+{
+	switch (file.getType())
+	{
+		case FileSystemFile_readFile:
+			{
+				SearchJob j = SearchJob(SearchJob_readFile, from->getFullName(), file.getName());
+				jp.insertJob(j);
+			}
+			break;
+		case FileSystemFile_directory:
+			{
+				SearchJob j = SearchJob(SearchJob_openDirectory, from->getFullName(), file.getName());
+				jp.insertJob(j);
+			}
+			break;
+		default:
+			LOG_DBG("skip file: ", file.getName());
+			break;
+	}
+}
+
 void SearchThread::jobDirectory(const SearchJob * job)
 {
-	LOG_DBG("Dirrectory: ", job->getFullName());
+	LOG_DBG("Directory: ", job->getFullName());
+	FileSystem fs;
 
-	/*if (!this->base->isMaxThreads())
-		this->base->insertThread("some path to some dir");*/
+	fs.readDir(job->getFullName());
+	if (!fs.isReaded())
+	{
+		LOG_DBG("can't read directory: ", job->getFullName());
+		return;
+	}
+
+	const list<FileSystemFile> & files = fs.getFiles();
+	if (files.size() < 1)
+	{
+		LOG_DBG("directory is empty: ", job->getFullName());
+		return;
+	}
+
+	if (files.size() > this->base->getSlicePoint() && !this->base->isMaxThreads())
+	{
+		auto it = files.begin();
+
+		while (it != files.end())
+		{
+			SearchJobPack jp;
+
+			for (unsigned fcount = this->base->getSlicePoint(); fcount > 0 && it != files.end(); fcount--, it++)
+			{
+				this->makeJob(job, jp, *it);
+			}
+
+			try
+			{
+				this->base->insertThread(jp);
+			}
+			catch (char const * mess)
+			{
+				LOG_DBG("insertThread: ", mess);
+
+				for (; it != files.end(); it++)
+				{
+					this->makeJob(job, jp, *it);
+				}
+
+				this->queue.push_back(jp);
+				break;
+			}
+		}
+	}
+	else
+	{
+		SearchJobPack jp;
+
+		for (auto it = files.begin(); it != files.end(); it++)
+		{
+			this->makeJob(job, jp, *it);
+		}
+
+		this->queue.push_back(jp);
+	}
 }
 
 void SearchThread::jobFile(const SearchJob * job)
@@ -251,3 +333,7 @@ void SearchText::insertFound(FiFuFound & found)
 	this->rdwr.unlock();
 }
 
+unsigned SearchText::getSlicePoint()
+{
+	return this->thread_slice_point;
+}
