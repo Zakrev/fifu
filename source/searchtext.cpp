@@ -126,7 +126,6 @@ void SearchThread::makeJob(const SearchJob * from, SearchJobPack & jp, const Fil
 
 void SearchThread::jobDirectory(const SearchJob * job)
 {
-	LOG_DBG("Directory: ", job->getFullName());
 	FileSystem fs;
 
 	fs.readDir(job->getFullName());
@@ -162,7 +161,7 @@ void SearchThread::jobDirectory(const SearchJob * job)
 			}
 			catch (char const * mess)
 			{
-				LOG_DBG("insertThread: ", mess);
+				LOG_DBG("can't create thread: ", mess);
 
 				for (; it != files.end(); it++)
 				{
@@ -189,7 +188,7 @@ void SearchThread::jobDirectory(const SearchJob * job)
 
 void SearchThread::jobFile(const SearchJob * job)
 {
-	LOG_DBG("File: ", job->getFullName());
+
 }
 
 SearchThread::SearchThread(SearchText * base, const std::string & path, const std::string & name)
