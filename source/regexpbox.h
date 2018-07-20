@@ -33,6 +33,7 @@ class RegExpContext
 		getBufferFunc * getFunc;
 		const size_t minimal_buffer_size = CONTEXT_BUFFER_MINIMAL;
 		std::map<std::string,RegExpBoxGroup &> named_base; // Именованные группы
+		bool lastIsSucces;
 
 		void replaceBuffer(size_t offset);
 		void increaseBuffer(size_t length);
@@ -43,10 +44,14 @@ class RegExpContext
 
 		std::string & getChars(size_t len); // Выдает символы по текущей позиции, каждый вызов переписывает shift_offset на len
 		void shift(); // Сдвигает указатель на количество прочитанных символов в getChars()
-		void saveContext();
-		void restoreContext();
-		void deleteRestoredContext();
+		void saveContext(); // Сохраняет контекст в стеке
+		void restoreContext(); // Восстанавливает последний контекст (но не удаляет из стека)
+		void deleteRestoredContext(); // Удаляет из стека последний контекст
 		bool EOF();
+		size_t getGlobalOffset();
+		void setSuccess();
+		void setError();
+		bool isLastSuccess();
 };
 
 class RegExpBox
@@ -68,7 +73,7 @@ class RegExpBoxGroup : public RegExpBox
 	private:
 		bool fNOT; // if true, then 'non-coincidence' by execute()
 		std::string name;
-		std::list<RegExpBox> child;
+		std::list<RegExpBox *> child;
 		std::list<size_t> offsets; // ...[start_global_offset][end_global_offset]...
 		void execute(RegExpContext & context);
 		void compile(RegExpContext & context);
