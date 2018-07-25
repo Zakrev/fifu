@@ -5,57 +5,41 @@
 #include <fstream>
 #include <vector>
 
+#include "regexpbox.h"
+
 namespace fifu
 {
 
-class RegExpBox;
 class RegExpBinary
 {
 	private:
-		RegExpBox * bin;
+		RegExpBoxGroup root;
 	public:
 		RegExpBinary(const std::string & exp);
 		~RegExpBinary();
+
+		void execute(RegExpContext & context);
 };
 
-class RegExp;
-class RegExpResult
-{
-	friend RegExp;
-	private:
-		std::vector<std::string> texts;
-		std::vector<size_t> positions; // Координаты результатов: ...[номер строки][смещение начала][смещение конца]...[номер строки][смещение начала][смещение конца]...
-
-		void insert(size_t line, size_t start, size_t end);
-		void insert(size_t line, size_t start, size_t end, const char * text);
-	public:
-		RegExpResult();
-		~RegExpResult();
-
-		size_t getSize() const;
-		size_t getLine(size_t idx) const;
-		size_t getStartOffset(size_t idx) const;
-		size_t getEndOffset(size_t idx) const;
-		const std::string & getText(size_t idx) const;
-};
-
-class RegExpContext;
 class RegExp
 {
 	private:
+		RegExpBuffer * file;
 		RegExpContext context;
-		const RegExpBinary * binary; // Регулярное выражение
+		RegExpBinary * binary; // Регулярное выражение
 		std::string eol; // EndOfLine, символы конца строки
-		size_t lines; // Количество прочитанных строк (текущая строка)
-		std::ifstream input;
+		bool endOfFile;
 	public:
-		RegExp(const RegExpBinary * binary, const std::string & eol);
+		RegExp(RegExpBinary * binary, const std::string & eol);
 		~RegExp();
 
-		void initSearch(const std::string & path);
-		RegExpResult nextResult();
-		RegExpResult nextResultAsText();
-		void resetSearch();
+		void searchStartInFile(const std::string & path);
+		/*void searchStartInBuffer(const std::string & buffer);
+		void searchStartInBuffer(getBufferFunc * get_buffer_func);*/
+		void searchNext();
+		bool eof();
+		/*result_t getResult();
+		std::list<result_t> & getResult(std::string & name);*/
 };
 
 }

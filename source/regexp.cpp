@@ -1,75 +1,170 @@
 #include "regexp.h"
+#include "logs.h"
 
 using namespace std;
 using namespace fifu;
 
-
-void RegExpResult::insert(size_t line, size_t start, size_t end)
+RegExpBinary::RegExpBinary(const std::string & exp)
 {
-	this->insert(line, start, end, (const char * )NULL);
+	RegExpContext context(exp);
+
+	this->root.compile(context);
 }
 
-void RegExpResult::insert(size_t line, size_t start, size_t end, const char * text)
+RegExpBinary::~RegExpBinary()
 {
-	auto it = this->positions.begin() + this->positions.size();
 
-	this->positions.insert(it, end);
-	this->positions.insert(it, start);
-	this->positions.insert(it, line);
+}
 
-	if (text)
+void RegExpBinary::execute(RegExpContext & context)
+{
+	this->root.execute(context);
+}
+
+
+
+RegExp::RegExp(RegExpBinary * binary, const std::string & eol)
+{
+	if (!binary)
+		throw "binary is NULL";
+
+	this->eol = eol;
+	this->binary = binary;
+	this->file = NULL;
+	this->endOfFile = false;
+}
+
+RegExp::~RegExp()
+{
+	if (this->file)
+		delete this->file;
+}
+
+class StaticBuffer : public RegExpBuffer
+{
+	private:
+		std::ifstream input;
+	public:
+		bool getBuffer(size_t offset, std::string * buffer, size_t length)
+		{
+			if (!this->input.is_open())
+			{
+				LOG_DBG("input not open");
+				return false;
+			}
+
+			this->input.clear();
+			this->input.seekg(offset, ios::beg);
+
+			char * tmp = new char [length];
+			if (!tmp)
+			{
+				LOG_DBG("failed new char");
+				return false;
+			}
+
+			this->input.read(tmp, length);
+			buffer->clear();
+			buffer->insert(0, tmp, input.gcount());
+			delete[] tmp;
+
+			return true;
+		}
+
+		StaticBuffer() { }
+		~StaticBuffer()
+		{
+			this->close();
+		}
+
+		void open(const std::string & path)
+		{
+			ifstream & inp = this->input;
+			inp.open(path, ios_base::binary);
+
+			if (!inp.is_open())
+			{
+				LOG_DBG("can't open file: ", path);
+				throw "can't open file";
+			}
+		}
+		void close()
+		{
+			if (this->input.is_open())
+				this->input.close();
+		}
+		void print(result_t & result)
+		{
+			string buffer;
+
+			this->getBuffer(result.global_offset_start, &buffer, result.len);
+			LOG_DBG("Result(", result.global_offset_start, ":", result.len, "): '", buffer, "' ", buffer.length());
+		}
+};
+
+void RegExp::searchStartInFile(const std::string & path)
+{
+	this->endOfFile = false;
+	if (!this->file)
 	{
-		auto it2 = this->texts.begin() + this->texts.size();
-		this->texts.insert(it2, string(text));
+		this->file = new StaticBuffer();
+
+		if (!this->file)
+			throw "failed new StaticBuffer";
+	}
+
+	StaticBuffer * file = (StaticBuffer *)this->file;
+	file->close();
+	file->open(path);
+
+	this->context = RegExpContext(this->file);
+}
+
+void RegExp::searchNext()
+{
+	while (!this->context.eof())
+	{
+		this->context.saveContext();
+		this->binary->execute(this->context);
+
+		if (!this->context.isSuccess())
+		{
+			context.restoreContext();
+			context.deleteRestoredContext();
+
+			if (this->context.eof())
+				break;
+
+			this->context.getChars(1);
+			this->context.shift();
+		}
+		else
+		{
+			context.deleteRestoredContext();
+
+			StaticBuffer * file = (StaticBuffer *)this->file;
+			file->print(this->context.getResult());
+
+		}
+	}
+
+	if (this->context.eof())
+	{
+		this->endOfFile = true;
 	}
 }
 
-RegExpResult::RegExpResult()
+bool RegExp::eof()
 {
-
+	return this->endOfFile;
+}
+/*
+result_t RegExp::getResult()
+{
+	throw "TODO";
 }
 
-RegExpResult::~RegExpResult()
+std::list<result_t> & RegExp::getResult(std::string group_name)
 {
-
-}
-
-size_t RegExpResult::getSize() const
-{
-	return this->positions.size() / (size_t)3;
-}
-
-size_t RegExpResult::getLine(size_t idx) const
-{
-	if (id >= this->positions.size())
-		throw "Invalid position id";
-
-	return this->positions[id * 3];
-}
-
-size_t RegExpResult::getStartOffset(size_t idx) const
-{
-	if (id >= this->positions.size())
-		throw "Invalid position id";
-
-	return this->positions[id * 3 + 1];
-}
-
-size_t RegExpResult::getEndOffset(size_t idx) const
-{
-	if (id >= this->positions.size())
-		throw "Invalid position id";
-
-	return this->positions[id * 3 + 2];
-}
-
-const std::string & RegExpResult::getText(size_t idx) const
-{
-	if (this->positions.size() != this->texts.size())
-		throw "Text not created";
-
-	if (id >= this->positions.size())
-		throw "Invalid position id";
-
-	return this->positions[id * 3 + 2];
-}
+	throw "TODO";
+}*/

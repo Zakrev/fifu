@@ -18,6 +18,7 @@ typedef enum
 class FileSystem;
 class FileSystemFile
 {
+	friend class FileSystem;
 	private:
 		std::string name;
 		FileSystemFile_type_t type;
@@ -27,8 +28,6 @@ class FileSystemFile
 
 		const std::string & getName() const;
 		FileSystemFile_type_t getType() const;
-
-		friend FileSystem;
 };
 
 class FileSystem

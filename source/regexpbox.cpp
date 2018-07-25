@@ -6,7 +6,7 @@ using namespace fifu;
 
 void RegExpContext::replaceBuffer(size_t offset)
 {
-	if (!this->getFunc)
+	if (!this->buffers)
 	{
 		this->context.eof = true;
 		return;
@@ -14,58 +14,75 @@ void RegExpContext::replaceBuffer(size_t offset)
 
 	if (this->context.eof && offset > this->context.global_offset)
 	{
-		LOG_DBG("Can't read buffer from %lu: EOF", (unsigned long)offset);
+		LOG_DBG("Can't read buffer from ", (unsigned long)offset, " : eof");
 		return;
 	}
 
-	switch (this->getFunc(offset, &this->buffer, this->minimal_buffer_size))
+	if (offset == this->context.global_offset)
 	{
-		case 0:
-			this->context.global_offset = offset;
-			this->context.local_buffer_size = this->buffer.size();
-			this->context.local_offset = 0;
-			this->context.shift_offset = 0;
-			if (this->minimal_buffer_size > this->context.local_buffer_size)
-			{
-				this->context.eof = true;
-			}
-			break;
-		case -1:
-			throw("Can't read buffer: getFunc return -1");
-		default:
-			throw "Invalid getBufferFunc() return result";
+		return;
 	}
+
+	if (this->buffers->getBuffer(offset, &this->buffer, RegExpContext::minimal_buffer_size))
+	{
+		this->context.global_offset = offset;
+		this->context.local_buffer_size = this->buffer.length();
+		this->context.local_offset = 0;
+		this->context.shift_offset = 0;
+		if (RegExpContext::minimal_buffer_size > this->context.local_buffer_size)
+		{
+			this->context.eof = true;
+		}
+	}
+	else
+		throw("Can't read buffer: getBuffer return false");
 }
 
 void RegExpContext::increaseBuffer(size_t length)
 {
-	if (!this->getFunc)
+	if (!this->buffers)
 	{
 		this->context.eof = true;
 		return;
 	}
 
+	size_t offset = this->context.global_offset;
 	if (this->context.eof)
 	{
-		LOG_DBG("Can't read buffer from %lu: EOF", (unsigned long)offset);
+		LOG_DBG("Can't read buffer from ", (unsigned long)offset, " : eof");
 		return;
 	}
 
 	string inc;
-	switch (this->getFunc(offset, &inc, length))
+	if (this->buffers->getBuffer(offset + this->context.local_buffer_size, &inc, length))
 	{
-		case 0:
-			this->buffer += inc;
-			this->context.local_buffer_size = this->buffer.size();
-			if (length > this->context.local_buffer_size)
-			{
-				this->context.eof = true;
-			}
-			break;
-		case -1:
-			throw("Can't read buffer: getFunc return -1");
-		default:
-			throw "Invalid getBufferFunc() return result";
+		this->buffer += inc;
+		this->context.local_buffer_size = this->buffer.length();
+		if (length > this->context.local_buffer_size)
+		{
+			this->context.eof = true;
+		}
+	}
+	else
+		throw("Can't read buffer: getBuffer return false");
+}
+
+void RegExpContext::insertResult(std::string & name, result_t result)
+{
+	if (name.length() == 0)
+	{
+		this->result = result;
+	}
+	else
+	{
+		auto it = this->results.find(name);
+
+		if (it == this->results.end())
+		{
+			this->results.insert( pair<string,list<result_t>>(name, list<result_t>()) );
+		}
+
+		this->results[name].push_back(result);
 	}
 }
 
@@ -79,12 +96,15 @@ RegExpContext::RegExpContext(const string & buffer)
 		.shift_offset = 0,
 		.eof = true,
 	};
-	this->getFunc = NULL;
+	this->buffers = NULL;
 }
 
-RegExpContext::RegExpContext(getBufferFunc * func)
+RegExpContext::RegExpContext(RegExpBuffer * buffers)
 {
-	this->getFunc = func;
+	if (!buffers)
+		throw "ptr buffers is NULL";
+
+	this->buffers = buffers;
 	this->context = {
 		.global_offset = 0,
 		.local_buffer_size = 0,
@@ -92,7 +112,12 @@ RegExpContext::RegExpContext(getBufferFunc * func)
 		.shift_offset = 0,
 		.eof = false,
 	};
-	this->replaceBuffer();
+	this->replaceBuffer(0);
+}
+
+RegExpContext::RegExpContext()
+{
+
 }
 
 RegExpContext::~RegExpContext()
@@ -100,8 +125,13 @@ RegExpContext::~RegExpContext()
 
 }
 
-string & RegExpContext::getChars(size_t len)
+string RegExpContext::getChars(size_t len)
 {
+	if (this->eof())
+	{
+		throw "Can't get chars: EOF";
+	}
+
 	if (this->context.local_buffer_size < (this->context.local_offset + len))
 	{
 		this->increaseBuffer( ((this->context.local_offset + len) - this->context.local_buffer_size) * 2 );
@@ -110,24 +140,44 @@ string & RegExpContext::getChars(size_t len)
 	if (this->context.local_buffer_size <= (this->context.local_offset + len))
 	{
 		this->context.shift_offset = this->context.local_buffer_size;
+		if (this->buffer.length() < this->context.local_offset)
+		{
+			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
+			throw "Invalid local_offset";
+		}
 		return this->buffer.substr(this->context.local_offset);
 	}
 	else
 	{
-		this->context.shift_offset += len;
+		this->context.shift_offset = len;
+		if (this->buffer.length() < this->context.local_offset)
+		{
+			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
+			throw "Invalid local_offset";
+		}
+		if (this->buffer.length() < this->context.local_offset + len)
+		{
+			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset + len);
+			throw "Invalid len";
+		}
 		return this->buffer.substr(this->context.local_offset, len);
 	}
 }
 
 void RegExpContext::shift()
 {
+	if (this->eof())
+	{
+		throw "Can't shift: EOF";
+	}
+
 	this->context.local_offset += this->context.shift_offset;
 
-	if (this->context.local_buffer_size <= this->context.local_offset)
+	if (this->context.local_buffer_size < this->context.local_offset)
 	{
 		if (this->context.eof)
 		{
-			LOG_DBG("Can't shift: EOF");
+			LOG_DBG("Can't shift: eof");
 			return;
 		}
 
@@ -145,8 +195,8 @@ void RegExpContext::restoreContext()
 	if (this->context_stack.size() < 1)
 		throw "Can't restore context: context_stack is empty";
 
-	this->context = *(this->context_stack.back());
-	this->replaceBuffer(this->context.global_offset);
+	this->replaceBuffer(this->context_stack.back().global_offset);
+	this->context = this->context_stack.back();
 }
 
 void RegExpContext::deleteRestoredContext()
@@ -157,7 +207,7 @@ void RegExpContext::deleteRestoredContext()
 	this->context_stack.pop_back();
 }
 
-bool RegExpContext::EOF()
+bool RegExpContext::eof()
 {
 	return (this->context.eof && (this->context.local_offset >= this->context.local_buffer_size));
 }
@@ -165,6 +215,11 @@ bool RegExpContext::EOF()
 size_t RegExpContext::getGlobalOffset()
 {
 	return this->context.global_offset;
+}
+
+size_t RegExpContext::getTotalOffset()
+{
+	return this->context.global_offset + this->context.local_offset;
 }
 
 void RegExpContext::setSuccess()
@@ -177,9 +232,30 @@ void RegExpContext::setError()
 	this->lastIsSucces = false;
 }
 
-bool RegExpContext::isLastSuccess()
+bool RegExpContext::isSuccess()
 {
 	return this->lastIsSucces;
+}
+
+result_t & RegExpContext::getResult()
+{
+	return this->result;
+}
+
+std::list<result_t> & RegExpContext::getResult(std::string & name)
+{
+	auto it = this->results.find(name);
+	if (it == this->results.end())
+		throw "Name not found";
+
+	return this->results[name];
+}
+
+void RegExpContext::dump()
+{
+	LOG_DBG("DUMP:\n\tglobal_offset: ", this->context.global_offset, "\n\tlocal_offset: ",
+		this->context.local_offset, "\n\tlocal_buffer_size: ", this->context.local_buffer_size,
+		"\n\tshift_offset: ", this->context.shift_offset, "\n\teof: ", this->context.eof);
 }
 
 // RegExpBox
@@ -212,12 +288,16 @@ RegExpBox::~RegExpBox()
 // RegExpBoxGroup
 void RegExpBoxGroup::execute(RegExpContext & context)
 {
+	result_t local_result = {
+		.len = 0,
+		.global_offset_start = context.getTotalOffset(),
+	};
 	context.saveContext();
-	for (auto it = this->child.begin(); !context.EOF() && it != this->child.end(); it++)
+	for (auto it = this->child.begin(); !context.eof() && it != this->child.end(); it++)
 	{
 		(*it)->execute(context);
 
-		if (context.isLastSuccess())
+		if (context.isSuccess())
 		{
 			if ((*it)->fOR)
 			{
@@ -242,36 +322,42 @@ void RegExpBoxGroup::execute(RegExpContext & context)
 
 	if (this->fNOT)
 	{
-		if (context.isLastSuccess())
+		if (context.isSuccess())
 			context.setError();
 		else
 			context.setSuccess();
 	}
 	/*else ненужно
 	{
-		if (context.isLastSuccess())
+		if (context.isSuccess())
 			context.setSuccess();
 		else
 			context.setError();
 	}*/
+
+	if (context.isSuccess())
+	{
+		local_result.len = context.getTotalOffset() - local_result.global_offset_start;
+		context.insertResult(this->name, local_result);
+	}
 }
 
 void RegExpBoxGroup::compile(RegExpContext & context)
 {
-	while (!context.EOF())
+	while (!context.eof())
 	{
 		string text = context.getChars(1);
 		if (text.size() == 0)
 		{
-			LOG_DBG("EOF on ", context.getGlobalOffset());
+			LOG_DBG("eof on ", context.getTotalOffset());
 			goto compile_end;
 		}
 
-		LOG_DBG("Found: '", text, "' on ", context.getGlobalOffset());
+		LOG_DBG("Found: '", text, "' on ", context.getTotalOffset());
 		do {
 			if (text == RB_SIMBOLS_OR)
 			{
-				LOG_ERR("Position ", context.getGlobalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
+				LOG_ERR("Position ", context.getTotalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
 				throw "Failed compile";
 			}
 
@@ -299,7 +385,7 @@ void RegExpBoxGroup::compile(RegExpContext & context)
 				text = context.getChars(1);
 				if (text != RB_SIMBOLS_GROUP_END)
 				{
-					LOG_ERR("Position ", context.getGlobalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
+					LOG_ERR("Position ", context.getTotalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
 					throw "Failed compile";
 				}
 				else
@@ -335,7 +421,7 @@ void RegExpBoxGroup::compile(RegExpContext & context)
 		} while (0);
 	}
 	compile_end:
-		LOG_DBG("Succesfull: ", context.getGlobalOffset());
+		LOG_DBG("Succesfull: ", context.getTotalOffset());
 }
 
 RegExpBoxGroup::RegExpBoxGroup() : RegExpBox()
@@ -350,7 +436,7 @@ RegExpBoxGroup::~RegExpBoxGroup()
 		auto it = this->child.begin();
 		RegExpBox * box = (*it);
 
-		this->child.pop_begin();
+		this->child.pop_front();
 		delete box;
 	}
 }
@@ -374,22 +460,23 @@ void RegExpBoxString::execute(RegExpContext & context)
 		else
 		{
 			context.setSuccess();
+			LOG_DBG("Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
 		}
 	}
 }
 
 void RegExpBoxString::compile(RegExpContext & context)
 {
-	while (!context.EOF())
+	while (!context.eof())
 	{
 		string text = context.getChars(1);
 		if (text.size() == 0)
 		{
-			LOG_DBG("EOF on ", context.getGlobalOffset());
+			LOG_DBG("eof on ", context.getTotalOffset());
 			goto compile_end;
 		}
 
-		LOG_DBG("Found: '", text, "' on ", context.getGlobalOffset());
+		LOG_DBG("Found: '", text, "' on ", context.getTotalOffset());
 		do {
 			// End self
 			if (text == RB_SIMBOLS_OR)
@@ -415,7 +502,7 @@ void RegExpBoxString::compile(RegExpContext & context)
 				text = context.getChars(1);
 				if (text.size() == 0)
 				{
-					LOG_ERR("Position ", context.getGlobalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
+					LOG_ERR("Position ", context.getTotalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
 					throw "Failed compile";
 				}
 			}
@@ -425,7 +512,7 @@ void RegExpBoxString::compile(RegExpContext & context)
 		} while (0);
 	}
 	compile_end:
-		LOG_DBG("Succesfull: ", context.getGlobalOffset());
+		LOG_DBG("Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
 }
 
 RegExpBoxString::RegExpBoxString()
