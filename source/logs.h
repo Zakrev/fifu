@@ -19,10 +19,10 @@ template <typename First, typename... Rest> static void logs_print_log(const Fir
 	logs_print_log(rest...);
 }
 
-#define LOG_DBG(...) \
-	logs_print_log("DBG<", __FUNCTION__, "><", __LINE__, ">: ", ## __VA_ARGS__ )
+#define LOG_DBG(...)
+	//logs_print_log("DBG<", __FUNCTION__, "><", __LINE__, ">: ", ## __VA_ARGS__ )
 
-#define LOG_ERR(...) \
-	logs_print_log("ERR<", __FUNCTION__, "><", __LINE__, ">: ", ## __VA_ARGS__ )
+#define LOG_ERR(...)
+	//logs_print_log("ERR<", __FUNCTION__, "><", __LINE__, ">: ", ## __VA_ARGS__ )
 
 #endif

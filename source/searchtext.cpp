@@ -93,8 +93,14 @@ bool SearchJobPack::empty() const
 }
 
 
+static void SearchThread_main(SearchThread * self) //функция потока
+{
+	if(!self)
+		throw "ptr 'self' is NULL";
 
-static void SearchThread_main(SearchThread * self); //функция потока
+	self->doing();
+}
+
 void SearchThread::init(SearchText * base, SearchJobPack & job)
 {
 	this->base = base;
@@ -246,35 +252,19 @@ void SearchThread::doing()
 
 
 
-static void SearchThread_main(SearchThread * self)
-{
-	if(!self)
-		throw "ptr 'self' is NULL";
-
-	self->doing();
-}
-
-
-
 
 SearchText::SearchText()
 {
 
 }
 
-
 SearchText::~SearchText()
 {
 
 }
 
-
-void SearchText::search(const std::string & text, std::vector<FiFuFound> * found)
+void SearchText::search(const std::string & text)
 {
-	if(!found)
-		throw "ptr 'found' is NULL";
-
-	this->found = found;
 	this->text = text;
 
 	this->insertThread(FileSystem::getLocalPath(), ".");
@@ -286,7 +276,6 @@ void SearchText::search(const std::string & text, std::vector<FiFuFound> * found
 		this->threads.pop_front();
 	}
 }
-
 
 void SearchText::insertThread(const std::string & path, const std::string & name)
 {
@@ -320,19 +309,56 @@ void SearchText::insertThread(SearchJobPack & job)
 
 bool SearchText::isMaxThreads() const
 {
-	return (this->threads_max <= this->threads.size());
+	return (this->config.threads_max <= this->threads.size());
 }
 
-void SearchText::insertFound(FiFuFound & found)
+unsigned SearchText::getSlicePoint() const
 {
-	this->rdwr.lock();
-
-	this->found->insert(this->found->begin() + this->found->size(), found);
-
-	this->rdwr.unlock();
+	return this->config.thread_slice_point;
 }
 
-unsigned SearchText::getSlicePoint()
+/*
+#include <cstring> // memcpy()
+// Linux fork(), wait(), exec()
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+// Linux fork(), wait(), exec()
+void SearchText::runExternalRegexp(const std::string & path)
 {
-	return this->thread_slice_point;
+	this->out_mutex.lock();
+	pid_t pid = fork();
+
+	if (pid == 0)
+	{
+		char * expr_str = new char [this->text.length() + 1];
+		char * patch_str = new char [path.length() + 1];
+
+		memcpy(expr_str, this->text.c_str(), this->text.length());
+		expr_str[this->text.length()] = '\0';
+
+		memcpy(patch_str, path.c_str(), path.length());
+		patch_str[path.length()] = '\0';
+
+		char * argv[] = { "/bin/grep", "-n", "-H", expr_str, patch_str, NULL };
+		execve("/bin/grep", argv, (char * const *)NULL);
+
+		delete [] expr_str;
+		delete [] patch_str;
+		LOG_ERR("Error: Can't execve()");
+		perror("Error: Can't execve()");
+		exit(1);
+	}
+	else if (pid > 0)
+	{
+		int status;
+		waitpid(pid, &status, 0);
+		this->out_mutex.unlock();
+	}
+	else
+	{
+		this->out_mutex.unlock();
+		throw "Can't fork()";
+	}
 }
+*/

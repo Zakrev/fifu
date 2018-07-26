@@ -6,7 +6,6 @@
 #include <thread>
 #include <list>
 
-#include "fifu.h"
 #include "filesystem.h"
 
 namespace fifu
@@ -75,26 +74,31 @@ class SearchThread
 		void doing();
 };
 
+typedef struct
+{
+	unsigned char threads_max;
+	unsigned char thread_slice_point;
+} SearchTextConfig_t;
+
 class SearchText
 {
+	friend class SearchThread;
 	private:
-		std::vector<FiFuFound> * found;
 		std::string text;
 		std::list<SearchThread *> threads;
 		std::mutex rdwr;
+		SearchTextConfig_t config;
 
-		const unsigned char threads_max = 10;
-		const unsigned thread_slice_point = 5;
-	public:
-		SearchText();
-		~SearchText();
-
-		void search(const std::string & text, std::vector<FiFuFound> * found);
 		void insertThread(const std::string & path, const std::string & name);
 		void insertThread(SearchJobPack & job);
 		bool isMaxThreads() const;
-		void insertFound(FiFuFound & found);
-		unsigned getSlicePoint();
+		unsigned getSlicePoint() const;
+	public:
+		SearchText();
+		SearchText(SearchTextConfig_t config);
+		~SearchText();
+
+		void search(const std::string & text);
 };
 
 }
