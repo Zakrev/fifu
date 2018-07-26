@@ -1,4 +1,7 @@
 #include "regexpbox.h"
+
+#define LOGS_H_LOG_ENABLED
+#define LDEBUG 1
 #include "logs.h"
 
 using namespace std;
@@ -14,7 +17,7 @@ void RegExpContext::replaceBuffer(size_t offset)
 
 	if (this->context.eof && offset > this->context.global_offset)
 	{
-		LOG_DBG("Can't read buffer from ", (unsigned long)offset, " : eof");
+		log(LDEBUG,"Can't read buffer from ", (unsigned long)offset, " : eof");
 		return;
 	}
 
@@ -49,7 +52,7 @@ void RegExpContext::increaseBuffer(size_t length)
 	size_t offset = this->context.global_offset;
 	if (this->context.eof)
 	{
-		LOG_DBG("Can't read buffer from ", (unsigned long)offset, " : eof");
+		log(LDEBUG,"Can't read buffer from ", (unsigned long)offset, " : eof");
 		return;
 	}
 
@@ -142,7 +145,7 @@ string RegExpContext::getChars(size_t len)
 		this->context.shift_offset = this->context.local_buffer_size;
 		if (this->buffer.length() < this->context.local_offset)
 		{
-			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
+			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
 			throw "Invalid local_offset";
 		}
 		return this->buffer.substr(this->context.local_offset);
@@ -152,12 +155,12 @@ string RegExpContext::getChars(size_t len)
 		this->context.shift_offset = len;
 		if (this->buffer.length() < this->context.local_offset)
 		{
-			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
+			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
 			throw "Invalid local_offset";
 		}
 		if (this->buffer.length() < this->context.local_offset + len)
 		{
-			LOG_ERR("Buffer: ", this->buffer.length(), " < ", this->context.local_offset + len);
+			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset + len);
 			throw "Invalid len";
 		}
 		return this->buffer.substr(this->context.local_offset, len);
@@ -177,7 +180,7 @@ void RegExpContext::shift()
 	{
 		if (this->context.eof)
 		{
-			LOG_DBG("Can't shift: eof");
+			log(LDEBUG,"Can't shift: eof");
 			return;
 		}
 
@@ -253,7 +256,7 @@ std::list<result_t> & RegExpContext::getResult(std::string & name)
 
 void RegExpContext::dump()
 {
-	LOG_DBG("DUMP:\n\tglobal_offset: ", this->context.global_offset, "\n\tlocal_offset: ",
+	log(LDEBUG,"DUMP:\n\tglobal_offset: ", this->context.global_offset, "\n\tlocal_offset: ",
 		this->context.local_offset, "\n\tlocal_buffer_size: ", this->context.local_buffer_size,
 		"\n\tshift_offset: ", this->context.shift_offset, "\n\teof: ", this->context.eof);
 }
@@ -349,15 +352,15 @@ void RegExpBoxGroup::compile(RegExpContext & context)
 		string text = context.getChars(1);
 		if (text.size() == 0)
 		{
-			LOG_DBG("eof on ", context.getTotalOffset());
+			log(LDEBUG,"eof on ", context.getTotalOffset());
 			goto compile_end;
 		}
 
-		LOG_DBG("Found: '", text, "' on ", context.getTotalOffset());
+		log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
 		do {
 			if (text == RB_SIMBOLS_OR)
 			{
-				LOG_ERR("Position ", context.getTotalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
+				log(LERROR,"Position ", context.getTotalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
 				throw "Failed compile";
 			}
 
@@ -385,7 +388,7 @@ void RegExpBoxGroup::compile(RegExpContext & context)
 				text = context.getChars(1);
 				if (text != RB_SIMBOLS_GROUP_END)
 				{
-					LOG_ERR("Position ", context.getTotalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
+					log(LERROR,"Position ", context.getTotalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
 					throw "Failed compile";
 				}
 				else
@@ -421,7 +424,7 @@ void RegExpBoxGroup::compile(RegExpContext & context)
 		} while (0);
 	}
 	compile_end:
-		LOG_DBG("Succesfull: ", context.getTotalOffset());
+		log(LDEBUG,"Succesfull: ", context.getTotalOffset());
 }
 
 RegExpBoxGroup::RegExpBoxGroup() : RegExpBox()
@@ -460,7 +463,7 @@ void RegExpBoxString::execute(RegExpContext & context)
 		else
 		{
 			context.setSuccess();
-			LOG_DBG("Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
+			log(LDEBUG,"Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
 		}
 	}
 }
@@ -472,11 +475,11 @@ void RegExpBoxString::compile(RegExpContext & context)
 		string text = context.getChars(1);
 		if (text.size() == 0)
 		{
-			LOG_DBG("eof on ", context.getTotalOffset());
+			log(LDEBUG,"eof on ", context.getTotalOffset());
 			goto compile_end;
 		}
 
-		LOG_DBG("Found: '", text, "' on ", context.getTotalOffset());
+		log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
 		do {
 			// End self
 			if (text == RB_SIMBOLS_OR)
@@ -502,7 +505,7 @@ void RegExpBoxString::compile(RegExpContext & context)
 				text = context.getChars(1);
 				if (text.size() == 0)
 				{
-					LOG_ERR("Position ", context.getTotalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
+					log(LERROR,"Position ", context.getTotalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
 					throw "Failed compile";
 				}
 			}
@@ -512,7 +515,7 @@ void RegExpBoxString::compile(RegExpContext & context)
 		} while (0);
 	}
 	compile_end:
-		LOG_DBG("Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
+		log(LDEBUG,"Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
 }
 
 RegExpBoxString::RegExpBoxString()

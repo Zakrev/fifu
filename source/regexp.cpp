@@ -1,4 +1,7 @@
 #include "regexp.h"
+
+#define LOGS_H_LOG_ENABLED
+#define LDEBUG 1
 #include "logs.h"
 
 using namespace std;
@@ -49,7 +52,7 @@ class StaticBuffer : public RegExpBuffer
 		{
 			if (!this->input.is_open())
 			{
-				LOG_DBG("input not open");
+				log(LDEBUG,"input not open");
 				return false;
 			}
 
@@ -59,7 +62,7 @@ class StaticBuffer : public RegExpBuffer
 			char * tmp = new char [length];
 			if (!tmp)
 			{
-				LOG_DBG("failed new char");
+				log(LDEBUG,"failed new char");
 				return false;
 			}
 
@@ -84,7 +87,7 @@ class StaticBuffer : public RegExpBuffer
 
 			if (!inp.is_open())
 			{
-				LOG_DBG("can't open file: ", path);
+				log(LDEBUG,"can't open file: ", path);
 				throw "can't open file";
 			}
 		}
@@ -98,7 +101,7 @@ class StaticBuffer : public RegExpBuffer
 			string buffer;
 
 			this->getBuffer(result.global_offset_start, &buffer, result.len);
-			LOG_DBG("Result(", result.global_offset_start, ":", result.len, "): '", buffer, "' ", buffer.length());
+			log(LDEBUG,"Result(", result.global_offset_start, ":", result.len, "): '", buffer, "' ", buffer.length());
 		}
 };
 

@@ -1,4 +1,7 @@
 #include "searchtext.h"
+
+#define LOGS_H_LOG_ENABLED
+#define LDEBUG 0
 #include "logs.h"
 
 #include <thread>
@@ -125,7 +128,7 @@ void SearchThread::makeJob(const SearchJob * from, SearchJobPack & jp, const Fil
 			}
 			break;
 		default:
-			LOG_DBG("skip file: ", file.getName());
+			log(LDEBUG,"skip file: ", file.getName());
 			break;
 	}
 }
@@ -137,14 +140,14 @@ void SearchThread::jobDirectory(const SearchJob * job)
 	fs.readDir(job->getFullName());
 	if (!fs.isReaded())
 	{
-		LOG_DBG("can't read directory: ", job->getFullName());
+		log(LDEBUG,"can't read directory: ", job->getFullName());
 		return;
 	}
 
 	const list<FileSystemFile> & files = fs.getFiles();
 	if (files.size() < 1)
 	{
-		LOG_DBG("directory is empty: ", job->getFullName());
+		log(LDEBUG,"directory is empty: ", job->getFullName());
 		return;
 	}
 
@@ -167,7 +170,7 @@ void SearchThread::jobDirectory(const SearchJob * job)
 			}
 			catch (char const * mess)
 			{
-				LOG_DBG("can't create thread: ", mess);
+				log(LDEBUG,"can't create thread: ", mess);
 
 				for (; it != files.end(); it++)
 				{
@@ -345,7 +348,7 @@ void SearchText::runExternalRegexp(const std::string & path)
 
 		delete [] expr_str;
 		delete [] patch_str;
-		LOG_ERR("Error: Can't execve()");
+		log(LERROR,"Error: Can't execve()");
 		perror("Error: Can't execve()");
 		exit(1);
 	}

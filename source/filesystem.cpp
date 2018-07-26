@@ -9,6 +9,8 @@
 #include <sys/stat.h>
 #include <string.h>
 
+#define LOGS_H_LOG_ENABLED
+#define LDEBUG 1
 #include "logs.h"
 
 using namespace std;
@@ -57,7 +59,7 @@ void FileSystem::readDir(const std::string & path)
 
 	if (!dir)
 	{
-		LOG_DBG("opendir: ", strerror(errno));
+		log(LDEBUG,"opendir: ", strerror(errno));
 		return;
 	}
 
@@ -93,7 +95,7 @@ void FileSystem::readDir(const std::string & path)
 	}
 	if (errno)
 	{
-		LOG_DBG("readdir: ", strerror(errno));
+		log(LDEBUG,"readdir: ", strerror(errno));
 	}
 
 	closedir(dir);
@@ -122,7 +124,7 @@ string FileSystem::getLocalPath()
 
 	if (!path)
 	{
-		LOG_DBG("getcwd: ", strerror(errno));
+		log(LDEBUG,"getcwd: ", strerror(errno));
 	}
 
 	string buff = path;
