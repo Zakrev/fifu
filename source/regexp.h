@@ -30,7 +30,7 @@ class RegExp
 		std::string eol; // EndOfLine, символы конца строки
 		bool endOfFile;
 	public:
-		RegExp(RegExpBinary * binary, const std::string & eol);
+		RegExp(RegExpBinary * binary, const std::string & eol = "");
 		~RegExp();
 
 		void searchStartInFile(const std::string & path);

@@ -1,7 +1,7 @@
 #include "regexpbox.h"
 
 #define LOGS_H_LOG_ENABLED
-#define LDEBUG 1
+#define LDEBUG 0
 #include "logs.h"
 
 using namespace std;
@@ -26,13 +26,13 @@ void RegExpContext::replaceBuffer(size_t offset)
 		return;
 	}
 
-	if (this->buffers->getBuffer(offset, &this->buffer, RegExpContext::minimal_buffer_size))
+	if (this->buffers->getBuffer(offset, &this->buffer, fifu::minimal_buffer_size))
 	{
 		this->context.global_offset = offset;
 		this->context.local_buffer_size = this->buffer.length();
 		this->context.local_offset = 0;
 		this->context.shift_offset = 0;
-		if (RegExpContext::minimal_buffer_size > this->context.local_buffer_size)
+		if (fifu::minimal_buffer_size > this->context.local_buffer_size)
 		{
 			this->context.eof = true;
 		}
@@ -89,7 +89,7 @@ void RegExpContext::insertResult(std::string & name, result_t result)
 	}
 }
 
-RegExpContext::RegExpContext(const string & buffer)
+RegExpContext::RegExpContext(const string & buffer, RegExpFlags_t regexp_flags)
 {
 	this->buffer = buffer;
 	this->context = {
@@ -100,9 +100,10 @@ RegExpContext::RegExpContext(const string & buffer)
 		.eof = true,
 	};
 	this->buffers = NULL;
+	this->regexp_flags = regexp_flags;
 }
 
-RegExpContext::RegExpContext(RegExpBuffer * buffers)
+RegExpContext::RegExpContext(RegExpBuffer * buffers, RegExpFlags_t regexp_flags)
 {
 	if (!buffers)
 		throw "ptr buffers is NULL";
@@ -116,6 +117,7 @@ RegExpContext::RegExpContext(RegExpBuffer * buffers)
 		.eof = false,
 	};
 	this->replaceBuffer(0);
+	this->regexp_flags = regexp_flags;
 }
 
 RegExpContext::RegExpContext()
@@ -240,6 +242,11 @@ bool RegExpContext::isSuccess()
 	return this->lastIsSucces;
 }
 
+bool RegExpContext::isSetOnlyText()
+{
+	return (this->regexp_flags & fifu::f_onlyText);
+}
+
 result_t & RegExpContext::getResult()
 {
 	return this->result;
@@ -347,82 +354,96 @@ void RegExpBoxGroup::execute(RegExpContext & context)
 
 void RegExpBoxGroup::compile(RegExpContext & context)
 {
-	while (!context.eof())
+	if (context.isSetOnlyText())
 	{
-		string text = context.getChars(1);
-		if (text.size() == 0)
+		RegExpBoxString * ch;
+
+		ch = new RegExpBoxString();
+		if (!ch)
+			throw "Failed new RegExpBoxString()";
+
+		this->child.push_back(ch);
+		ch->compile(context);
+
+		goto compile_end;
+	}
+	else // not isSetOnlyText()
+		while (!context.eof())
 		{
-			log(LDEBUG,"eof on ", context.getTotalOffset());
-			goto compile_end;
-		}
-
-		log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
-		do {
-			if (text == RB_SIMBOLS_OR)
+			string text = context.getChars(1);
+			if (text.size() == 0)
 			{
-				log(LERROR,"Position ", context.getTotalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
-				throw "Failed compile";
-			}
-
-			// End self
-			if (text == RB_SIMBOLS_GROUP_END)
-			{
+				log(LDEBUG,"eof on ", context.getTotalOffset());
 				goto compile_end;
 			}
-			// End self
 
-			// Create RegExpBoxGroup
-			if (text == RB_SIMBOLS_GROUP_START)
-			{
-				context.shift();
-
-				RegExpBoxGroup * ch;
-
-				ch = new RegExpBoxGroup();
-				if (!ch)
-					throw "Failed new RegExpBoxGroup()";
-
-				this->child.push_back(ch);
-				ch->compile(context);
-
-				text = context.getChars(1);
-				if (text != RB_SIMBOLS_GROUP_END)
+			log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
+			do {
+				if (text == RB_SIMBOLS_OR)
 				{
-					log(LERROR,"Position ", context.getTotalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
+					log(LERROR,"Position ", context.getTotalOffset(), ", unexpected '", RB_SIMBOLS_OR "': ", text);
 					throw "Failed compile";
 				}
-				else
+
+				// End self
+				if (text == RB_SIMBOLS_GROUP_END)
+				{
+					goto compile_end;
+				}
+				// End self
+
+				// Create RegExpBoxGroup
+				if (text == RB_SIMBOLS_GROUP_START)
 				{
 					context.shift();
 
+					RegExpBoxGroup * ch;
+
+					ch = new RegExpBoxGroup();
+					if (!ch)
+						throw "Failed new RegExpBoxGroup()";
+
+					this->child.push_back(ch);
+					ch->compile(context);
+
 					text = context.getChars(1);
-					if (text == RB_SIMBOLS_OR)
+					if (text != RB_SIMBOLS_GROUP_END)
+					{
+						log(LERROR,"Position ", context.getTotalOffset(), ", expected '", RB_SIMBOLS_GROUP_END "': ", text);
+						throw "Failed compile";
+					}
+					else
 					{
 						context.shift();
-						ch->fOR = true;
+
+						text = context.getChars(1);
+						if (text == RB_SIMBOLS_OR)
+						{
+							context.shift();
+							ch->fOR = true;
+						}
 					}
+					break;
 				}
-				break;
-			}
-			// Create RegExpBoxGroup
+				// Create RegExpBoxGroup
 
-			//Create RegExpBoxString
-			if (text == RB_SIMBOLS_ESC)
-			{
-				context.shift();
-			}
-			RegExpBoxString * ch;
+				//Create RegExpBoxString
+				if (text == RB_SIMBOLS_ESC)
+				{
+					context.shift();
+				}
+				RegExpBoxString * ch;
 
-			ch = new RegExpBoxString();
-			if (!ch)
-				throw "Failed new RegExpBoxString()";
+				ch = new RegExpBoxString();
+				if (!ch)
+					throw "Failed new RegExpBoxString()";
 
-			this->child.push_back(ch);
-			ch->compile(context);
-			//Create RegExpBoxString
+				this->child.push_back(ch);
+				ch->compile(context);
+				//Create RegExpBoxString
 
-		} while (0);
-	}
+			} while (0);
+		}
 	compile_end:
 		log(LDEBUG,"Succesfull: ", context.getTotalOffset());
 }
@@ -470,50 +491,59 @@ void RegExpBoxString::execute(RegExpContext & context)
 
 void RegExpBoxString::compile(RegExpContext & context)
 {
-	while (!context.eof())
+	if (context.isSetOnlyText())
 	{
-		string text = context.getChars(1);
-		if (text.size() == 0)
+		while (!context.eof())
 		{
-			log(LDEBUG,"eof on ", context.getTotalOffset());
-			goto compile_end;
+			this->value = context.getChars(fifu::minimal_buffer_size);
 		}
-
-		log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
-		do {
-			// End self
-			if (text == RB_SIMBOLS_OR)
-			{
-				context.shift();
-				this->fOR = true;
-				goto compile_end;
-			}
-			if (text == RB_SIMBOLS_GROUP_END)
-			{
-				goto compile_end;
-			}
-			if (text == RB_SIMBOLS_GROUP_START)
-			{
-				goto compile_end;
-			}
-			// End self
-
-			// Add text
-			if (text == RB_SIMBOLS_ESC)
-			{
-				context.shift();
-				text = context.getChars(1);
-				if (text.size() == 0)
-				{
-					log(LERROR,"Position ", context.getTotalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
-					throw "Failed compile";
-				}
-			}
-			this->value += text;
-			context.shift();
-			// Add text
-		} while (0);
+		goto compile_end;
 	}
+	else // not isSetOnlyText()
+		while (!context.eof())
+		{
+			string text = context.getChars(1);
+			if (text.size() == 0)
+			{
+				log(LDEBUG,"eof on ", context.getTotalOffset());
+				goto compile_end;
+			}
+
+			log(LDEBUG,"Found: '", text, "' on ", context.getTotalOffset());
+			do {
+				// End self
+				if (text == RB_SIMBOLS_OR)
+				{
+					context.shift();
+					this->fOR = true;
+					goto compile_end;
+				}
+				if (text == RB_SIMBOLS_GROUP_END)
+				{
+					goto compile_end;
+				}
+				if (text == RB_SIMBOLS_GROUP_START)
+				{
+					goto compile_end;
+				}
+				// End self
+
+				// Add text
+				if (text == RB_SIMBOLS_ESC)
+				{
+					context.shift();
+					text = context.getChars(1);
+					if (text.size() == 0)
+					{
+						log(LERROR,"Position ", context.getTotalOffset(), ", expected any symbol after '" RB_SIMBOLS_ESC "': ", text);
+						throw "Failed compile";
+					}
+				}
+				this->value += text;
+				context.shift();
+				// Add text
+			} while (0);
+		}
 	compile_end:
 		log(LDEBUG,"Succesfull: ", context.getTotalOffset(), " '", this->value, "'");
 }

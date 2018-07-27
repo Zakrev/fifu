@@ -8,6 +8,14 @@
 namespace fifu
 {
 
+enum
+{
+	minimal_buffer_size = 128,
+
+	f_onlyText = 0x1, // Интерпритация регулярного выражения как обычного текста
+};
+typedef unsigned int RegExpFlags_t;
+
 class RegExpBuffer
 {
 	public:
@@ -40,8 +48,6 @@ class RegExpContext
 {
 	friend class RegExpBoxGroup;
 	private:
-		const static size_t minimal_buffer_size = 128;
-
 		std::string buffer;
 		std::list<context_t> context_stack;
 		context_t context;
@@ -50,13 +56,14 @@ class RegExpContext
 		bool lastIsSucces;
 		result_t result; // Общий результат
 		std::map<std::string,std::list<result_t>> results; // Именованные группы, результаты
+		RegExpFlags_t regexp_flags;
 
 		void replaceBuffer(size_t offset);
 		void increaseBuffer(size_t length);
 		void insertResult(std::string & name, result_t result);
 	public:
-		RegExpContext(const std::string & buffer);
-		RegExpContext(RegExpBuffer * buffers);
+		RegExpContext(const std::string & buffer, RegExpFlags_t regexp_flags = 0);
+		RegExpContext(RegExpBuffer * buffers, RegExpFlags_t regexp_flags = 0);
 		RegExpContext();
 		~RegExpContext();
 
@@ -71,7 +78,7 @@ class RegExpContext
 		void setSuccess();
 		void setError();
 		bool isSuccess();
-
+		bool isSetOnlyText();
 		result_t & getResult();
 		std::list<result_t> & getResult(std::string & name);
 
