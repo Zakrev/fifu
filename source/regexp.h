@@ -15,7 +15,7 @@ class RegExpBinary
 	private:
 		RegExpBoxGroup root;
 	public:
-		RegExpBinary(const std::string & exp);
+		RegExpBinary(const std::string & exp, RegExpFlags_t flags = 0);
 		~RegExpBinary();
 
 		void execute(RegExpContext & context);

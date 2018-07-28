@@ -14,6 +14,18 @@ SearchJob::SearchJob(SearchJob_type_t type, const std::string & path, const std:
 	this->type = type;
 	this->path = path;
 	this->name = name;
+
+	switch (type)
+	{
+		case SearchJob_openDirectory:
+			if (name.length())
+				this->full_name = path + name + "/";
+			else
+				this->full_name = path;
+			break;
+		default:
+			this->full_name = path + name;
+	}
 }
 
 SearchJob::~SearchJob()
@@ -26,25 +38,19 @@ SearchJob_type_t SearchJob::getType() const
 	return this->type;
 }
 
-string SearchJob::getPath() const
+const std::string & SearchJob::getPath() const
 {
 	return this->path;
 }
 
-std::string SearchJob::getName() const
+const std::string & SearchJob::getName() const
 {
 	return this->name;
 }
 
-std::string SearchJob::getFullName() const
+const std::string & SearchJob::getFullName() const
 {
-	switch (this->type)
-	{
-		case SearchJob_openDirectory:
-			return this->path + this->name + "/";
-		default:
-			return this->path + this->name;
-	}
+	return this->full_name;
 }
 
 
@@ -197,12 +203,12 @@ void SearchThread::jobDirectory(const SearchJob * job)
 
 void SearchThread::jobFile(const SearchJob * job)
 {
-
+	this->base->executeRegExp(job->getFullName());
 }
 
 SearchThread::SearchThread(SearchText * base, const std::string & path, const std::string & name)
 {
-	SearchJob job = SearchJob(SearchJob_openDirectory, path, ".");
+	SearchJob job = SearchJob(SearchJob_openDirectory, path, "");
 	SearchJobPack jobp;
 	jobp.insertJob(job);
 
@@ -258,19 +264,39 @@ void SearchThread::doing()
 
 SearchText::SearchText()
 {
+	this->bin = NULL;
 
+	this->config.threads_max = 100;
+	this->config.thread_slice_point = 3;
 }
+
+SearchText::SearchText(SearchTextConfig_t config)
+{
+	this->bin = NULL;
+
+	this->config = config;
+}
+
 
 SearchText::~SearchText()
 {
 
 }
 
-void SearchText::search(const std::string & text)
+void SearchText::search(const std::string & rgexp, RegExpFlags_t flags)
 {
-	this->text = text;
+	this->rgexp = rgexp;
 
-	this->insertThread(FileSystem::getLocalPath(), ".");
+	if (this->bin)
+	{
+		delete this->bin;
+	}
+	this->bin = new RegExpBinary(rgexp, flags);
+
+	if (!this->bin)
+		throw "Can't new RegExpBinary()";
+
+	this->insertThread(FileSystem::getLocalPath(), "");
 
 	while (this->threads.size() > 0)
 	{
@@ -318,6 +344,24 @@ bool SearchText::isMaxThreads() const
 unsigned SearchText::getSlicePoint() const
 {
 	return this->config.thread_slice_point;
+}
+
+void SearchText::executeRegExp(const string & path)
+{
+	RegExp exp = RegExp(this->bin, "\n");
+
+	try
+	{
+		exp.searchStartInFile(path);
+		while (!exp.eof())
+		{
+			exp.searchNext();
+		}
+	}
+	catch (char const * err)
+	{
+		log(LERROR, "Error: ", err);
+	}
 }
 
 /*

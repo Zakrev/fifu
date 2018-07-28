@@ -61,7 +61,7 @@ void RegExpContext::increaseBuffer(size_t length)
 	{
 		this->buffer += inc;
 		this->context.local_buffer_size = this->buffer.length();
-		if (length > this->context.local_buffer_size)
+		if (length > inc.length())
 		{
 			this->context.eof = true;
 		}
@@ -147,8 +147,8 @@ string RegExpContext::getChars(size_t len)
 		this->context.shift_offset = this->context.local_buffer_size;
 		if (this->buffer.length() < this->context.local_offset)
 		{
-			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
-			throw "Invalid local_offset";
+			log(LDEBUG,"Buffer - Invalid local_offset: ", this->buffer.length(), " < ", this->context.local_offset);
+			return "";
 		}
 		return this->buffer.substr(this->context.local_offset);
 	}
@@ -157,13 +157,13 @@ string RegExpContext::getChars(size_t len)
 		this->context.shift_offset = len;
 		if (this->buffer.length() < this->context.local_offset)
 		{
-			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset);
-			throw "Invalid local_offset";
+			log(LDEBUG,"Buffer - Invalid local_offset: ", this->buffer.length(), " < ", this->context.local_offset);
+			return "";
 		}
 		if (this->buffer.length() < this->context.local_offset + len)
 		{
-			log(LERROR,"Buffer: ", this->buffer.length(), " < ", this->context.local_offset + len);
-			throw "Invalid len";
+			log(LDEBUG,"Buffer - Invalid len: ", this->buffer.length(), " < ", this->context.local_offset + len);
+			return "";
 		}
 		return this->buffer.substr(this->context.local_offset, len);
 	}
@@ -173,7 +173,8 @@ void RegExpContext::shift()
 {
 	if (this->eof())
 	{
-		throw "Can't shift: EOF";
+		log(LDEBUG,"Can't shift: eof");
+		return;
 	}
 
 	this->context.local_offset += this->context.shift_offset;

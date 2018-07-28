@@ -7,9 +7,9 @@
 using namespace std;
 using namespace fifu;
 
-RegExpBinary::RegExpBinary(const std::string & exp)
+RegExpBinary::RegExpBinary(const std::string & exp, RegExpFlags_t flags)
 {
-	RegExpContext context(exp);
+	RegExpContext context(exp, flags);
 
 	this->root.compile(context);
 }
@@ -46,7 +46,8 @@ RegExp::~RegExp()
 class StaticBuffer : public RegExpBuffer
 {
 	private:
-		std::ifstream input;
+		string path; // DEBUG
+		ifstream input;
 	public:
 		bool getBuffer(size_t offset, std::string * buffer, size_t length)
 		{
@@ -82,6 +83,7 @@ class StaticBuffer : public RegExpBuffer
 
 		void open(const std::string & path)
 		{
+			this->path = path;
 			ifstream & inp = this->input;
 			inp.open(path, ios_base::binary);
 
@@ -98,10 +100,24 @@ class StaticBuffer : public RegExpBuffer
 		}
 		void print(result_t & result)
 		{
-			string buffer;
+			if (!this->input.is_open())
+			{
+				log(LDEBUG,"input not open");
+				return;
+			}
 
-			this->getBuffer(result.global_offset_start, &buffer, result.len);
-			log(LDEBUG,"Result(", result.global_offset_start, ":", result.len, "): '", buffer, "' ", buffer.length());
+			this->input.clear();
+			this->input.seekg(result.global_offset_start, ios::beg);
+
+			char * tmp = new char [1024];
+			if (!tmp)
+			{
+				log(LDEBUG,"failed new char");
+				return;
+			}
+			this->input.getline(tmp, 1024);
+
+			cout << path << "\n (" << result.global_offset_start << "): " << tmp << endl;
 		}
 };
 

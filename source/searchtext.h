@@ -7,6 +7,7 @@
 #include <list>
 
 #include "filesystem.h"
+#include "regexp.h"
 
 namespace fifu
 {
@@ -24,14 +25,15 @@ class SearchJob
 		SearchJob_type_t type;
 		std::string path;
 		std::string name;
+		std::string full_name;
 	public:
 		SearchJob(SearchJob_type_t type, const std::string & path, const std::string & name);
 		~SearchJob();
 
 		SearchJob_type_t getType() const;
-		std::string getPath() const;
-		std::string getName() const;
-		std::string getFullName() const;
+		const std::string & getPath() const;
+		const std::string & getName() const;
+		const std::string & getFullName() const;
 };
 
 class SearchJobPack
@@ -76,15 +78,16 @@ class SearchThread
 
 typedef struct
 {
-	unsigned char threads_max;
-	unsigned char thread_slice_point;
+	unsigned char threads_max; // Максимальное количество потоков
+	unsigned char thread_slice_point; // Количество файлов на поток
 } SearchTextConfig_t;
 
 class SearchText
 {
 	friend class SearchThread;
 	private:
-		std::string text;
+		std::string rgexp;  // Регулярное выражение
+		RegExpBinary * bin;
 		std::list<SearchThread *> threads;
 		std::mutex rdwr;
 		SearchTextConfig_t config;
@@ -93,12 +96,13 @@ class SearchText
 		void insertThread(SearchJobPack & job);
 		bool isMaxThreads() const;
 		unsigned getSlicePoint() const;
+		void executeRegExp(const std::string & path);
 	public:
 		SearchText();
 		SearchText(SearchTextConfig_t config);
 		~SearchText();
 
-		void search(const std::string & text);
+		void search(const std::string & rgexp, RegExpFlags_t flags = 0);
 };
 
 }
